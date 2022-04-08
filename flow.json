@@ -7,6 +7,8 @@
 	},
 	"contracts": {
 		"CoatCheck": "./contracts/CoatCheck.cdc",
+		"ExampleNFT": "./contracts/standard/ExampleNFT.cdc",
+		"ExampleToken": "./contracts/standard/ExampleToken.cdc",
 		"FlowStorageFees": {
 			"source": "./contracts/standard/FlowStorageFees.cdc",
 			"aliases": {
@@ -37,8 +39,8 @@
 			  "emulator": "0x0ae53cb6e3f42a79",
 			  "testnet": "0x7e60df042a9c0868",
 			  "mainnet": "0x1654653399040a61"
-			}
-		  }
+			}	
+		}
 	},
 	"networks": {
 		"emulator": "127.0.0.1:3569",
@@ -47,22 +49,33 @@
 	},
 	"accounts": {
 		"emulator-account": {
-			"address": "f8d6e0586b0a20c7",
-			"key": "429e09e78b4004567a1d67d7215f81c9163e60b9329fbd31023eaa533c86e35e"
+		  "address": "0xf8d6e0586b0a20c7",
+		  "key": "ea9f78f283898abea1a9a1b9aa8671615ab96e38b2fbf329cc696a106d442200"
+		},
+		"emulator-creator": {
+		  "address": "0x01cf0e2f2f715450",
+		  "key": "ea9f78f283898abea1a9a1b9aa8671615ab96e38b2fbf329cc696a106d442200"
+		},
+		"emulator-redeemer": {
+		  "address": "0x179b6b1cb6755e31",
+		  "key": "ea9f78f283898abea1a9a1b9aa8671615ab96e38b2fbf329cc696a106d442200"
 		}
 	},
 	"deployments": {
 		"emulator": {
 			"emulator-account": [
 				"NonFungibleToken",
-				"FlowStorageFees",
+				"ExampleToken",
+				"ExampleNFT",
 				"CoatCheck"
-			]
+			],
+			"emulator-creator": [],
+			"emulator-redeemer": []
 		}
 	},
 	"emulatorAccounts": {
 		"emulator-account": "f8d6e0586b0a20c7",
-		"emulator-creator": "179b6b1cb6755e31",
-		"emulator-redeemer": "01cf0e2f2f715450"
+		"emulator-creator": "01cf0e2f2f715450",
+		"emulator-redeemer": "179b6b1cb6755e31"
 	}
 }

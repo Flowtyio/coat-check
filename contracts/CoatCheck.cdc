@@ -207,8 +207,8 @@ pub contract CoatCheck {
         }
     }
 
-    pub fun createValet(): @CoatCheck.Valet {
-        return <- create Valet()
+    pub fun getValetPublic(): Capability<&CoatCheck.Valet{CoatCheck.ValetPublic}> {
+        return self.account.getCapability<&CoatCheck.Valet{CoatCheck.ValetPublic}>(self.ValetPublicPath)
     }
 
     init() {
@@ -218,6 +218,10 @@ pub contract CoatCheck {
 
         self.ValetStoragePath = /storage/coatCheckValet
         self.ValetPublicPath = /public/coatCheckValet
+
+        let valet <- create Valet()
+        self.account.save(<-valet, to: self.ValetStoragePath)
+        self.account.link<&CoatCheck.Valet{CoatCheck.ValetPublic}>(self.ValetPublicPath, target: self.ValetStoragePath)
     }
 }
  
