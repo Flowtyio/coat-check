@@ -61,7 +61,7 @@
 		  "key": "ea9f78f283898abea1a9a1b9aa8671615ab96e38b2fbf329cc696a106d442200"
 		}
 	},
-	"deployments": {
+	"deployments": {	
 		"emulator": {
 			"emulator-account": [
 				"NonFungibleToken",
