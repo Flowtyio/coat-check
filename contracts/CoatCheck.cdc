@@ -37,17 +37,24 @@ pub contract CoatCheck {
         pub fun redeem(fungibleTokenReceiver: &{FungibleToken.Receiver}?, nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?)
     }
 
+    // Tickets are used to fungible tokens, non-fungible tokens, or both.
+    // A ticket can be created by the CoatCheck valet, and can be redeemed only by
+    // capabilities owned by the designated redeemer of a ticket
     pub resource Ticket: TicketPublic {
         // a ticket can have Fungible Tokens AND NonFungibleTokens
         access(self) var fungibleTokenVaults: @[FungibleToken.Vault]?
         access(self) var nonFungibleTokens: @[NonFungibleToken.NFT]?
+        
+        // when a ticket is redeemed, we take back the storage fee that 
+        // was recorded when the ticket was made so that it can be returned
         access(contract) let feeRefundReceiver: Capability<&FlowToken.Vault{FungibleToken.Receiver}>
 
+        // only this address's capabilities can be used to redeem this ticket
         pub let redeemer: Address
 
         // The following variables are maintained by the CoatCheck contract
-        access(self) var redeemed: Bool
-        access(self) var storageFee: UFix64
+        access(self) var redeemed: Bool // a ticket can only be redeemed once. It also cannot be destroyed unless redeemed is set to true
+        access(self) var storageFee: UFix64 // the storage fee taken to hold this ticket in storage. It is returned when the ticket is redeemed.
 
         init(
             fungibleTokenVaults: @[FungibleToken.Vault]?,
@@ -68,6 +75,8 @@ pub contract CoatCheck {
             self.storageFee = 0.0
         }
 
+        // redeem the ticket using an optional receiver for fungible tokens and non-fungible tokens. The supplied receivers must be
+        // owned by the redeemer of this ticket.
         pub fun redeem(fungibleTokenReceiver: &{FungibleToken.Receiver}?, nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?) {
             pre {
                 fungibleTokenReceiver == nil || (fungibleTokenReceiver!.owner!.address == self.redeemer) : "incorrect owner"
@@ -78,27 +87,26 @@ pub contract CoatCheck {
 
             self.redeemed = true
 
-            let coatCheckAddr = CoatCheck.account.address
-            let beforeBalance = FlowStorageFees.defaultTokenAvailableBalance(coatCheckAddr) 
-
             let vaults <- self.fungibleTokenVaults <- nil
             let tokens <- self.nonFungibleTokens <- nil
 
+            // do we have vaults to distribute?
             if vaults != nil && vaults?.length! > 0 {
                 while vaults?.length! > 0 {
+                    // pop them off our list of vaults one by one and deposit them
                     let vault <- vaults?.remove(at: 0)!
                     fungibleTokenReceiver!.deposit(from: <-vault)
                 }
             }
 
+            // do we have nfts to distribute?
             if tokens != nil && tokens?.length! > 0 {
                 while tokens?.length! > 0 {
+                    // pop them off our list of tokens one by one and deposit them
                     let token <- tokens?.remove(at: 0)!
                     nonFungibleTokenReceiver!.deposit(token: <-token)
                 }
             }
-
-            let afterBalance = FlowStorageFees.defaultTokenAvailableBalance(coatCheckAddr) 
 
             destroy vaults
             destroy tokens
@@ -114,7 +122,13 @@ pub contract CoatCheck {
         }
     }
 
+    // ValetPublic contains our main entry-point methods that
+    // anyone can use to make/redeem tickets.
     pub resource interface ValetPublic {
+        // Create a new ticket containing a list of vaults, nfts, or both.
+        // The creator of a ticket must also include a vault to pay fees with,
+        // and a receiver to refund the fee taken once a ticket is redeemed.
+        // Any extra tokens sent for the storage fee are sent back when the ticket is made
         pub fun createTicket(
             redeemer: Address, 
             vaults: @[FungibleToken.Vault]?, 
@@ -122,16 +136,23 @@ pub contract CoatCheck {
             feeVault: @FlowToken.Vault, 
             redemptionReceiver: Capability<&FlowToken.Vault{FungibleToken.Receiver}>
         )
-        pub fun borrowTicket(ticketID: UInt64): &Ticket{TicketPublic}?
+
+        // redeem a ticket, supplying an optional receiver to use for depositing
+        // any fts or nfts in the ticket
         pub fun redeemTicket(
             ticketID: UInt64, 
             fungibleTokenReceiver: &{FungibleToken.Receiver}?,
             nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?,
         )
+        pub fun borrowTicket(ticketID: UInt64): &Ticket{TicketPublic}?
+        
     }
 
     pub resource Valet: ValetPublic {
         access(self) var tickets: @{UInt64: Ticket}
+
+        // we store the fees taken when a ticket is made so that the exact amount is withdrawn
+        // when a ticket is redeemed
         access(self) var feesByTicketID: {UInt64: UFix64}
 
         init() {
@@ -139,6 +160,10 @@ pub contract CoatCheck {
             self.feesByTicketID = {}
         }
 
+        // Create a new ticket containing a list of vaults, nfts, or both.
+        // The creator of a ticket must also include a vault to pay fees with,
+        // and a receiver to refund the fee taken once a ticket is redeemed.
+        // Any extra tokens sent for the storage fee are sent back when the ticket is made
         pub fun createTicket(
             redeemer: Address, 
             vaults: @[FungibleToken.Vault]?, 
@@ -146,6 +171,7 @@ pub contract CoatCheck {
             feeVault: @FlowToken.Vault,
             redemptionReceiver: Capability<&FlowToken.Vault{FungibleToken.Receiver}>
         ) {
+            // calculate the balance in flow that we have before storing this new ticket
             let coatCheckAddr = CoatCheck.account.address
             let beforeBalance = FlowStorageFees.defaultTokenAvailableBalance(coatCheckAddr)
 
@@ -160,10 +186,13 @@ pub contract CoatCheck {
             let oldTicket <- self.tickets[ticketID] <- ticket
             destroy oldTicket
 
-            // calculate how much storage was taken up
+            // calculate how much storage was taken up now that the ticket has been stored
             let afterBalance = FlowStorageFees.defaultTokenAvailableBalance(coatCheckAddr)
             CoatCheck.flowTokenReceiver.borrow()!
+            // the difference in flow balance is taken as a fee
             let storageFee = beforeBalance - afterBalance
+
+            // return the rest
             let storageFeeVault <- feeVault.withdraw(amount: storageFee)
             CoatCheck.flowTokenReceiver.borrow()!.deposit(from: <-storageFeeVault)
 
@@ -184,6 +213,9 @@ pub contract CoatCheck {
             }
         }
 
+        // redeem the ticket using supplied receivers.
+        // if a ticket has fungible tokens, the fungibleTokenReceiver is required.
+        // if a ticket has nfts, the nonFungibleTokenReceiver is required.
         pub fun redeemTicket(
             ticketID: UInt64, 
             fungibleTokenReceiver: &{FungibleToken.Receiver}?,
@@ -192,9 +224,12 @@ pub contract CoatCheck {
             pre {
                 self.tickets[ticketID] != nil : "ticket does not exist"
             }
+            // take the ticket out of storage and redeem it
             let ticket <-! self.tickets[ticketID] <- nil
             ticket?.redeem(fungibleTokenReceiver: fungibleTokenReceiver, nonFungibleTokenReceiver: nonFungibleTokenReceiver)
 
+            // calculate the difference in storage fees now that the ticket has been taken out of storage
+            // and return it to the ticket creator
             let storageFee = self.feesByTicketID.remove(key: ticket?.uuid!)
             let refundVault <- CoatCheck.flowTokenProvider.borrow()!.withdraw(amount: storageFee!)
             ticket?.feeRefundReceiver!.borrow()!.deposit(from: <-refundVault)
