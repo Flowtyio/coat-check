@@ -34,7 +34,7 @@ pub contract CoatCheck {
     pub event CoatCheckInitialized(resourceID: UInt64)
 
     pub resource interface TicketPublic {
-        pub fun redeem(fungibleTokenReceiver: Capability<&{FungibleToken.Receiver}>, nonFungibleTokenReceiver: Capability<&{NonFungibleToken.Receiver}>)
+        pub fun redeem(fungibleTokenReceiver: &{FungibleToken.Receiver}?, nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?)
     }
 
     pub resource Ticket: TicketPublic {
@@ -68,13 +68,15 @@ pub contract CoatCheck {
             self.storageFee = 0.0
         }
 
-        pub fun redeem(fungibleTokenReceiver: Capability<&{FungibleToken.Receiver}>, nonFungibleTokenReceiver: Capability<&{NonFungibleToken.Receiver}>) {
+        pub fun redeem(fungibleTokenReceiver: &{FungibleToken.Receiver}?, nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?) {
             pre {
-                fungibleTokenReceiver == nil || (fungibleTokenReceiver.borrow()!.owner!.address == self.redeemer) : "incorrect owner"
-                nonFungibleTokenReceiver == nil || (nonFungibleTokenReceiver.borrow()!.owner!.address == self.redeemer) : "incorrect owner"
-                self.fungibleTokenVaults == nil || fungibleTokenReceiver.borrow() != nil: "must provide fungibleTokenReceiver when there is a vault to claim"
-                self.nonFungibleTokens == nil || nonFungibleTokenReceiver.borrow() != nil: "must provide nonFungibleTokenReceiver when there is a vault to claim"
+                fungibleTokenReceiver == nil || (fungibleTokenReceiver!.owner!.address == self.redeemer) : "incorrect owner"
+                nonFungibleTokenReceiver == nil || (nonFungibleTokenReceiver!.owner!.address == self.redeemer) : "incorrect owner"
+                self.fungibleTokenVaults == nil || fungibleTokenReceiver != nil: "must provide fungibleTokenReceiver when there is a vault to claim"
+                self.nonFungibleTokens == nil || nonFungibleTokenReceiver != nil: "must provide nonFungibleTokenReceiver when there is a vault to claim"
             }
+
+            self.redeemed = true
 
             let coatCheckAddr = CoatCheck.account.address
             let beforeBalance = FlowStorageFees.defaultTokenAvailableBalance(coatCheckAddr) 
@@ -82,17 +84,17 @@ pub contract CoatCheck {
             let vaults <- self.fungibleTokenVaults <- nil
             let tokens <- self.nonFungibleTokens <- nil
 
-            if self.fungibleTokenVaults != nil && vaults != nil && vaults?.length! > 0 {
+            if vaults != nil && vaults?.length! > 0 {
                 while vaults?.length! > 0 {
                     let vault <- vaults?.remove(at: 0)!
-                    fungibleTokenReceiver.borrow()!.deposit(from: <-vault)
+                    fungibleTokenReceiver!.deposit(from: <-vault)
                 }
             }
 
-            if self.nonFungibleTokens != nil && tokens != nil && tokens?.length! > 0 {
+            if tokens != nil && tokens?.length! > 0 {
                 while tokens?.length! > 0 {
                     let token <- tokens?.remove(at: 0)!
-                    nonFungibleTokenReceiver.borrow()!.deposit(token: <-token)
+                    nonFungibleTokenReceiver!.deposit(token: <-token)
                 }
             }
 
@@ -123,8 +125,8 @@ pub contract CoatCheck {
         pub fun borrowTicket(ticketID: UInt64): &Ticket{TicketPublic}?
         pub fun redeemTicket(
             ticketID: UInt64, 
-            fungibleTokenReceiver: Capability<&{FungibleToken.Receiver}>,
-            nonFungibleTokenReceiver: Capability<&{NonFungibleToken.Receiver}>,
+            fungibleTokenReceiver: &{FungibleToken.Receiver}?,
+            nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?,
         )
     }
 
@@ -184,8 +186,8 @@ pub contract CoatCheck {
 
         pub fun redeemTicket(
             ticketID: UInt64, 
-            fungibleTokenReceiver: Capability<&{FungibleToken.Receiver}>,
-            nonFungibleTokenReceiver: Capability<&{NonFungibleToken.Receiver}>
+            fungibleTokenReceiver: &{FungibleToken.Receiver}?,
+            nonFungibleTokenReceiver: &{NonFungibleToken.Receiver}?
         ) {
             pre {
                 self.tickets[ticketID] != nil : "ticket does not exist"
@@ -195,7 +197,7 @@ pub contract CoatCheck {
 
             let storageFee = self.feesByTicketID.remove(key: ticket?.uuid!)
             let refundVault <- CoatCheck.flowTokenProvider.borrow()!.withdraw(amount: storageFee!)
-            ticket?.feeRefundReceiver?.borrow()!!.deposit(from: <-refundVault)
+            ticket?.feeRefundReceiver!.borrow()!.deposit(from: <-refundVault)
 
             emit TicketRedeemed(ticketResourceID: ticket?.uuid!, redeemer: ticket?.redeemer!, storageFeeReturned: storageFee!)
             destroy ticket

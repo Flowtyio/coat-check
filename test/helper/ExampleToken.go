@@ -35,8 +35,17 @@ func ConfigureAndMintExampleToken(accountName string, flow *gwtf.GoWithTheFlow) 
 	return
 }
 
-func GetExampleTokenBalance(accountName string, flow *gwtf.GoWithTheFlow) (amount float64, err error) {
-	val, err := flow.ScriptFromFile("get_balance_example_token").AccountArgument(accountName).RunReturns()
-	amount = FlowUFix64ToFloat64(val.ToGoValue().(uint64))
+func GetExampleTokenBalanceFloat(accountName string, flow *gwtf.GoWithTheFlow) (amount float64, err error) {
+	val, err := GetExampleTokenBalance(accountName, flow)
+	amount = FlowUFix64ToFloat64(val)
+	return
+}
+
+func GetExampleTokenBalance(accountName string, flow *gwtf.GoWithTheFlow) (amount uint64, err error) {
+	val, err := flow.ScriptFromFile("get_example_token_balance").AccountArgument(accountName).RunReturns()
+	if err != nil {
+		return
+	}
+	amount = val.ToGoValue().(uint64)
 	return
 }

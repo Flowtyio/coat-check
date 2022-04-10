@@ -2,10 +2,9 @@ package test
 
 import (
 	"fmt"
-	"github.com/zeebo/assert"
 	"testing"
 
-	"github.com/bjartek/go-with-the-flow/v2/gwtf"
+	"github.com/stretchr/testify/assert"
 
 	"coat-check/test/helper"
 )
@@ -14,7 +13,7 @@ func TestCreateTicket_FT_success(t *testing.T) {
 	tokenAmount := 100.0
 	tokenAmountStr := fmt.Sprintf("%f", tokenAmount)
 
-	f := gwtf.NewGoWithTheFlowInMemoryEmulator()
+	f := helper.NewGWTF()
 
 	// get example token setup on our creator account
 	err := helper.ConfigureAndMintExampleToken(Creator, f)
@@ -22,6 +21,9 @@ func TestCreateTicket_FT_success(t *testing.T) {
 
 	err = helper.MintFlowTokensToAccount(Creator, tokenAmount, f)
 	assert.Nil(t, err)
+
+	creatorFlowBalance, _ := helper.GetFlowTokenBalance(Creator, f)
+	creatorETBalance, _ := helper.GetExampleTokenBalance(Creator, f)
 
 	// make a ticket for 100 ExampleTokens
 	events, err := f.TransactionFromFile("valet/create_ticket_example_token").
@@ -37,4 +39,15 @@ func TestCreateTicket_FT_success(t *testing.T) {
 	assert.Equal(t, "A.0ae53cb6e3f42a79.FlowToken.TokensDeposited", events[4].Type)    // refund the rest
 	assert.Equal(t, "A.f8d6e0586b0a20c7.CoatCheck.TicketCreated", events[5].Type)      // a ticket was made
 
+	// the two FlowToken deposit events should equal the amount withdrawn
+	withdraw := events[0].Value.Fields[0].ToGoValue().(uint64)
+	dep1 := events[3].Value.Fields[0].ToGoValue().(uint64)
+	dep2 := events[4].Value.Fields[0].ToGoValue().(uint64)
+
+	assert.Equal(t, withdraw, dep1+dep2)
+
+	creatorFlowBalanceAfter, _ := helper.GetFlowTokenBalance(Creator, f)
+	creatorETBalanceAfter, _ := helper.GetExampleTokenBalance(Creator, f)
+	assert.Greater(t, creatorFlowBalance, creatorFlowBalanceAfter)
+	assert.Greater(t, creatorETBalance, creatorETBalanceAfter)
 }

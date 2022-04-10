@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	github.com/bjartek/go-with-the-flow/v2 v2.4.1
-	github.com/zeebo/assert v1.1.0
 )
 
 require (

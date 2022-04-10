@@ -11,7 +11,7 @@ transaction(amount: UFix64, redeemer: Address) {
     let flowTokenReceiver: Capability<&FlowToken.Vault{FungibleToken.Receiver}>
 
     prepare(acct: AuthAccount) {
-        let exampleTokenProviderPath = /private/exampleNFTProviderForCoatCheck
+        let exampleTokenProviderPath = /private/exampleProviderForCoatCheck
         let flowTokenReceiverPath = /public/flowTokenReceiverForCoatCheck
 
         if !acct.getCapability<&ExampleToken.Vault{FungibleToken.Provider}>(exampleTokenProviderPath).check() {
